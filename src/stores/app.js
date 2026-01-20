@@ -1,339 +1,663 @@
-<script setup>
-    import {ref, computed, watch} from 'vue'
-    import {X, Plus, Trash2, ArrowLeft} from 'lucide-vue-next'
-    import {useAppStore} from '../stores/app'
+import { defineStore } from 'pinia'
+import { ref, computed, watch } from 'vue'
+import { authApi, userApi, transactionApi, goalApi, getTokens, clearTokens } from '../api'
 
-    const props = defineProps({
-    isOpen: Boolean,
-    selectedDate: String, // 'YYYY-MM-DD'
-    initialTransactions: {
-    type: Array,
-    default: () => []
-},
-    initialEditData: { // 최근 거래 내역에서 바로 수정 모드로 열 때 사용
-    type: Object,
-    default: null
-}
+const STORAGE_KEY = 'armageddon_data'
+
+export const useAppStore = defineStore('app', () => {
+    // State
+    const user = ref(null)
+    const transactions = ref([])
+    const goals = ref([])
+    const loading = ref(false)
+    const error = ref(null)
+    const monthlySummary = ref(null)
+    const dailyTransactions = ref([])
+    const selectedDate = ref(null)
+
+    // Load from localStorage (for goals - 백엔드에 Goal API가 없으므로 로컬 저장)
+    // const loadFromStorage = () => {
+    //     const stored = localStorage.getItem(STORAGE_KEY)
+    //     if (stored) {
+    //         try {
+    //             const data = JSON.parse(stored)
+    //             goals.value = data.goals || []
+    //             // 토큰이 있으면 사용자 정보 복원
+    //             const tokens = getTokens()
+    //             if (tokens && data.user) {
+    //                 user.value = data.user
+    //             }
+    //         } catch {
+    //             goals.value = []
+    //         }
+    //     }
+    // }
+
+    // Save to localStorage
+    // const saveToStorage = () => {
+    //   localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    //     user: user.value,
+    //     goals: goals.value
+    //   }))
+    // }
+
+    // Watch for changes and save
+    // watch([user, goals], saveToStorage, { deep: true })
+
+    // ============ Auth Actions ============
+
+    // 로그인
+    const login = async (loginId, password) => {
+        loading.value = true
+        error.value = null
+        try {
+            const response = await authApi.login(loginId, password)
+            if (response.result === 'SUCCESS') {
+                // 토큰은 API에서 자동 저장됨
+                // 사용자 정보 설정 (JWT에서 추출하거나 별도 API 호출 필요)
+                user.value = {
+                    loginId,
+                    email: '',
+                    nickname: loginId,
+                    createdAt: Date.now()
+                }
+                await fetchGoals()
+                return true
+            }
+            return false
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 회원가입
+    const signup = async (loginId, password, email, nickname) => {
+        loading.value = true
+        error.value = null
+        try {
+            const response = await authApi.signup(loginId, password, email, nickname)
+            if (response.result === 'SUCCESS') {
+                // 회원가입 후 자동 로그인
+                return await login(loginId, password)
+            }
+            return false
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 로그아웃
+    const logout = async () => {
+        loading.value = true
+        try {
+            await authApi.logout()
+        } catch {
+            // 에러 무시
+        } finally {
+            user.value = null
+            transactions.value = []
+            clearTokens()
+            loading.value = false
+        }
+    }
+
+    // 계정 삭제
+    const deleteAccount = async () => {
+        loading.value = true
+        error.value = null
+        try {
+            await userApi.deleteAccount()
+            user.value = null
+            transactions.value = []
+            goals.value = []
+            clearTokens()
+            return true
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 사용자 정보 조회
+    const fetchUserInfo = async () => {
+        loading.value = true
+        error.value = null
+        try {
+            const response = await userApi.getMe()
+            if (response.result === 'SUCCESS' && response.data) {
+                user.value = {
+                    ...user.value,
+                    id: response.data.id,
+                    loginId: response.data.loginId,
+                    email: response.data.email,
+                    nickname: response.data.nickname
+                }
+                return true
+            }
+            return false
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 사용자 정보 수정
+    const updateUserProfile = async ({ loginId, email, nickname, currentPassword }) => {
+        loading.value = true
+        error.value = null
+        try {
+            const response = await userApi.updateUser({ loginId, email, nickname, currentPassword })
+            if (response.result === 'SUCCESS') {
+                // 성공 시 사용자 정보 업데이트
+                if (loginId) user.value.loginId = loginId
+                if (email) user.value.email = email
+                if (nickname) user.value.nickname = nickname
+                return true
+            }
+            return false
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 이메일 인증 요청
+    const requestEmailVerification = async (email) => {
+        loading.value = true
+        error.value = null
+        try {
+            const response = await authApi.requestEmailVerification(email)
+            return response.result === 'SUCCESS'
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 이메일 인증 확인
+    const confirmEmailVerification = async (email, code) => {
+        loading.value = true
+        error.value = null
+        try {
+            const response = await authApi.confirmEmailVerification(email, code)
+            return response.result === 'SUCCESS'
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 비밀번호 재설정 요청
+    const requestPasswordReset = async (loginId, email) => {
+        loading.value = true
+        error.value = null
+        try {
+            const response = await authApi.requestPasswordReset(loginId, email)
+            return response.result === 'SUCCESS'
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // 비밀번호 재설정 확인
+    const confirmPasswordReset = async (loginId, code, newPassword) => {
+        loading.value = true
+        error.value = null
+        try {
+            const response = await authApi.confirmPasswordReset(loginId, code, newPassword)
+            return response.result === 'SUCCESS'
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally {
+            loading.value = false
+        }
+    }
+
+    // ============ Transaction Actions ============
+
+    // 거래 추가
+    const addTransaction = async (transaction) => {
+        error.value = null
+        try {
+            const response = await transactionApi.createTransaction(transaction)
+            if (response.result === 'SUCCESS') {
+                // 저장 성공 후, 해당 날짜의 일간 내역을 다시 불러와서 ID를 동기화
+                await fetchDailyTransactions(transaction.date)
+
+                if (dailyTransactions.value && dailyTransactions.value.length > 0) {
+                    const mergedMap = new Map()
+
+                    // 기존 데이터 유지
+                    transactions.value.forEach(t => mergedMap.set(t.id, t))
+
+                    // 일간 데이터 병합 (최신값 우선)
+                    dailyTransactions.value.forEach(t => mergedMap.set(t.id, t))
+
+                    const mergedList = Array.from(mergedMap.values())
+                    mergedList.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id)
+
+                    transactions.value = mergedList
+                }
+                return true
+            }
+            return false
+        } catch (err) {
+            error.value = err.message
+            // API 실패 시 로컬에만 저장 (오프라인 지원)
+            const newTransaction = {
+                ...transaction,
+                id: `txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                createdAt: Date.now(),
+                synced: false
+            }
+            transactions.value.push(newTransaction)
+            return true
+        }
+    }
+
+    // 거래 상세 조회 (Memo 필드 등 가져오기 위함)
+    const fetchTransactionDetail = async (id) => {
+        try {
+            // 임시 ID이면 조회 불가
+            if (typeof id === 'string' && id.startsWith('txn-')) return null
+
+            const detail = await transactionApi.getTransaction(id)
+            return detail
+        } catch (err) {
+            console.error(err)
+            return null
+        }
+    }
+
+    // 거래 수정
+    const updateTransaction = async (id, updates) => {
+        error.value = null
+        try {
+            // 숫자 ID인 경우에만 API 호출
+            if (typeof id === 'number' || !id.toString().startsWith('txn-')) {
+                await transactionApi.updateTransaction(id, updates)
+
+                // 수정 성공 후, 해당 날짜의 일간 내역을 다시 불러와서 동기화
+                await fetchDailyTransactions(updates.date)
+
+                if (dailyTransactions.value && dailyTransactions.value.length > 0) {
+                    const mergedMap = new Map()
+
+                    // 기존 데이터 유지
+                    transactions.value.forEach(t => mergedMap.set(t.id, t))
+
+                    // 일간 데이터 병합 (최신값 우선)
+                    dailyTransactions.value.forEach(t => mergedMap.set(t.id, t))
+
+                    const mergedList = Array.from(mergedMap.values())
+                    mergedList.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id)
+
+                    transactions.value = mergedList
+                }
+            } else {
+                // 로컬 전용 ID인 경우 로컬 상태만 업데이트
+                const index = transactions.value.findIndex(t => t.id === id)
+                if (index !== -1) {
+                    transactions.value[index] = { ...transactions.value[index], ...updates }
+                }
+            }
+            return true
+        } catch (err) {
+            error.value = err.message
+            // API 실패해도 로컬 상태는 업데이트
+            const index = transactions.value.findIndex(t => t.id === id)
+            if (index !== -1) {
+                transactions.value[index] = { ...transactions.value[index], ...updates, synced: false }
+            }
+            return true
+        }
+    }
+
+    // 거래 삭제
+    const deleteTransactionById = async (id) => {
+        error.value = null
+
+        // 삭제 전에 해당 거래의 날짜를 저장 (나중에 다시 불러오기 위함)
+        const transaction = transactions.value.find(t => t.id === id)
+        const transactionDate = transaction?.date
+
+        try {
+            // 숫자 ID인 경우에만 API 호출
+            if (typeof id === 'number' || !id.toString().startsWith('txn-')) {
+                await transactionApi.deleteTransaction(id)
+
+                // 삭제 성공 후, 해당 날짜의 일간 내역을 다시 불러와서 동기화
+                if (transactionDate) {
+                    await fetchDailyTransactions(transactionDate)
+
+                    if (dailyTransactions.value) {
+                        const mergedMap = new Map()
+
+                        // 기존 데이터 유지
+                        transactions.value.forEach(t => {
+                            if (t.id !== id) { // 삭제된 항목 제외
+                                mergedMap.set(t.id, t)
+                            }
+                        })
+
+                        // 일간 데이터 병합 (최신값 우선)
+                        dailyTransactions.value.forEach(t => mergedMap.set(t.id, t))
+
+                        const mergedList = Array.from(mergedMap.values())
+                        mergedList.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id)
+
+                        transactions.value = mergedList
+                    }
+                }
+            } else {
+                // 로컬 전용 ID인 경우 로컬 상태에서만 제거
+                transactions.value = transactions.value.filter(t => t.id !== id)
+            }
+            return true
+        } catch (err) {
+            error.value = err.message
+            // API 실패해도 로컬에서 제거
+            transactions.value = transactions.value.filter(t => t.id !== id)
+            return true
+        }
+    }
+
+    // 월간 거래 + 요약 동시 로드
+    const fetchMonthlyData = async (year, month) => {
+        loading.value = true
+        error.value = null
+        try {
+            const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
+            const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`
+
+            // 월간 거래 가져오기
+            const txnRes = await transactionApi.getTransactions(startDate, endDate)
+            if (txnRes.result === 'SUCCESS') {
+                const newTxns = txnRes.data
+
+                // [수정] 기존 로직(해당 월 데이터 삭제 후 5개 대체) 제거 -> 병합(Merge) 로직 적용
+                const mergedMap = new Map()
+
+                // 1. 기존 데이터 전체 매핑
+                transactions.value.forEach(t => mergedMap.set(t.id, t))
+
+                // 2. 새로운 데이터(5개) 업데이트
+                newTxns.forEach(t => mergedMap.set(t.id, t))
+
+                // 3. 리스트 변환 및 정렬
+                const mergedList = Array.from(mergedMap.values())
+                mergedList.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id)
+
+                transactions.value = mergedList
+            }
+
+            // 월간 요약 가져오기
+            const summaryRes = await transactionApi.getMonthlySummary(year, month + 1)
+            monthlySummary.value = summaryRes
+            return true
+        } catch (err) {
+            error.value = err.message
+            return false
+        } finally { loading.value = false }
+    }
+
+    // 일간 거래
+    const fetchDailyTransactions = async (date) => {
+        console.log('[Store] fetchDailyTransactions 호출:', date)
+        error.value = null
+        try {
+            const res = await transactionApi.getDailyTransactions(date)
+            console.log('[Store] API 응답:', res)
+            console.log('[Store] 받은 데이터 개수:', res.data?.length || 0)
+            if (res.data && res.data.length > 0) {
+                console.log('[Store] 첫 번째 데이터:', res.data[0])
+            }
+            dailyTransactions.value = res.data
+            selectedDate.value = date
+            console.log('[Store] dailyTransactions 업데이트 완료:', dailyTransactions.value.length, '건')
+            return true
+        } catch (err) {
+            console.error('[Store] fetchDailyTransactions 에러:', err)
+            error.value = err.message
+            return false
+        }
+    }
+    const fetchTransactions = async (year, month) => {
+        const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
+        const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`
+
+        // 로컬 초기화 방지: 기존 데이터를 유지하면서 병합할 준비
+        // (월 이동 시에는 초기화가 맞지만, 같은 월 안에서 갱신될 때는 날아가면 안 됨
+
+        const res = await transactionApi.getTransactions(startDate, endDate)
+        if (res.result === 'SUCCESS') {
+            const newTxns = res.data
+
+            const mergedMap = new Map()
+
+            // 1. 기존 데이터 매핑
+            transactions.value.forEach(t => mergedMap.set(t.id, t))
+
+            // 2. 새로운 데이터 덮어쓰기 또는 추가
+            newTxns.forEach(t => mergedMap.set(t.id, t))
+
+            // 3. 배열로 변환 및 정렬
+            const mergedList = Array.from(mergedMap.values())
+            mergedList.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id)
+
+            transactions.value = mergedList
+            // 5개만 가져오는 걸로는 부족하므로 전체 일자 조회 트리거 (비동기)
+            // fetchTransactions가 끝난 후 호출하거나, 아예 loadMonthlyData에서 호출하도록 설계
+            return true
+        }
+        return false
+    }
+
+    // [신규] 월간 데이터 전수 조사 (백엔드 5개 제한 우회)
+    // 해당 월의 모든 날짜에 대해 일간 조회를 수행하여 데이터를 긁어옴
+    const fetchAllDaysInMonth = async (year, month) => {
+
+        try {
+            console.log(`[fetchAllDaysInMonth] Start fetching for ${year}-${month + 1} (Sequential)`)
+            const lastDay = new Date(year, month + 1, 0).getDate()
+
+            const mergedMap = new Map()
+            // 1. 기존 데이터 유지
+            if (transactions.value && transactions.value.length > 0) {
+                transactions.value.forEach(t => {
+                    if (t && t.id) mergedMap.set(t.id, t)
+                })
+            }
+
+            let successCount = 0
+            let totalItemsFound = 0
+
+            for (let day = 1; day <= lastDay; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                try {
+                    // 순차 호출로 백엔드 부하 방지 및 디버깅 용이성 확보
+                    const res = await transactionApi.getDailyTransactions(dateStr)
+
+                    if (res && res.result === 'SUCCESS') {
+                        successCount++
+                        if (Array.isArray(res.data) && res.data.length > 0) {
+                            console.log(`[DailyFetch] Found ${res.data.length} items on ${dateStr}`)
+                            totalItemsFound += res.data.length
+                            res.data.forEach(t => {
+                                if (t && t.id) mergedMap.set(t.id, t)
+                            })
+                        }
+                    } else {
+                        // console.warn(`[DailyFetch] ${dateStr} returned invalid/fail`)
+                    }
+                } catch (err) {
+                    console.error(`[DailyFetch] Error on ${dateStr}:`, err)
+                }
+            }
+
+            console.log(`[fetchAllDaysInMonth] Finished. Success: ${successCount}/${lastDay}, Items Found: ${totalItemsFound}`)
+
+            const mergedList = Array.from(mergedMap.values())
+            // 최신순 정렬
+            mergedList.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id)
+
+            console.log(`[fetchAllDaysInMonth] Final count updated to store: ${mergedList.length}`)
+            transactions.value = mergedList
+            return true
+        } catch (err) {
+            console.error('Failed to fetch all days:', err)
+            return false
+        }
+    }
+
+    // ============ Goal Actions ============
+
+    const fetchGoals = async () => {
+        try {
+            loading.value = true
+            const res = await goalApi.getGoals()
+            if (res.result === 'SUCCESS') {
+                goals.value = res.data.map(g => {
+                    // Map backend fields to frontend model
+                    const type = g.goalType === 'SAVING' ? 'savings' : 'spending'
+                    const isSavings = type === 'savings'
+
+                    // Calculate derived fields if missing in summary
+                    const currentAmount = g.targetAmount * (g.progressRate / 100)
+
+                    return {
+                        id: g.goalId,
+                        type: type,
+                        title: g.title,
+                        status: mapStatus(g.status), // Helper needed or inline
+                        // Savings fields
+                        targetAmount: g.targetAmount,
+                        currentAmount: currentAmount,
+                        progressRate: g.progressRate,
+                        progress: g.progressRate, // Frontend uses both?
+                        // Spending fields
+                        category: g.category || '기타',
+                        budgetLimit: g.targetAmount,
+                        spentAmount: currentAmount,
+                        usageRate: g.progressRate,
+                        remaining: g.targetAmount - currentAmount,
+                        // Common
+                        startDate: g.startDate,
+                        endDate: g.endDate,
+                        rawStatus: g.status
+                    }
+                })
+            }
+        } catch (err) {
+            console.error(err)
+        } finally {
+            loading.value = false
+        }
+    }
+
+    const fetchGoalDetail = async (id) => {
+        try {
+            const res = await goalApi.getGoalDetail(id)
+            if (res.result === 'SUCCESS') {
+                return res.data
+            }
+        } catch (err) {
+            console.error(err)
+        }
+        return null
+    }
+
+    const mapStatus = (backendStatus) => {
+        // Backend: COMPLETED, ACTIVE?
+        // Frontend expects: COMPLETED, on-track, warning, exceeded
+        if (backendStatus === 'COMPLETED') return 'COMPLETED'
+        // Default to on-track or simple mapping if generic
+        return 'on-track'
+    }
+
+    const addGoal = async (goal) => {
+        if (goal.type === 'savings') {
+            await goalApi.createSavingGoal(goal)
+        } else {
+            await goalApi.createExpenseGoal(goal)
+        }
+        await fetchGoals()
+    }
+
+    const updateGoal = async (id, updates) => {
+        await goalApi.updateGoal(id, updates)
+        await fetchGoals()
+    }
+
+    const deleteGoal = async (id) => {
+        await goalApi.deleteGoal(id)
+        await fetchGoals()
+    }
+
+
+    // ============ Computed ============
+    const isAuthenticated = computed(() => !!user.value || !!getTokens())
+
+    // ============ Initialize ============
+    // loadFromStorage()
+
+    return {
+        // State
+        user,
+        transactions,
+        goals,
+        loading,
+        error,
+        // Computed
+        isAuthenticated,
+        // Auth actions
+        login,
+        signup,
+        logout,
+        deleteAccount,
+        fetchUserInfo,
+        updateUserProfile,
+        requestEmailVerification,
+        confirmEmailVerification,
+        requestPasswordReset,
+        confirmPasswordReset,
+        // Transaction actions
+        monthlySummary,
+        dailyTransactions,
+        selectedDate,
+        addTransaction,
+        updateTransaction,
+        deleteTransaction: deleteTransactionById,
+        fetchMonthlyData,
+        fetchDailyTransactions,
+        fetchTransactions,
+        fetchTransactionDetail,
+        fetchAllDaysInMonth,
+        // Goal actions
+        fetchGoals,
+        fetchGoalDetail,
+        addGoal,
+        updateGoal,
+        deleteGoal
+    }
 })
-
-    const emit = defineEmits(['close'])
-    const store = useAppStore()
-
-    // Modes: 'list' | 'add' | 'edit'
-    const mode = ref('list')
-    const categories = ['식비', '교통', '쇼핑', '주거', '통신', '의료', '여가', '교육', '저축', '경조사', '기타']
-
-    // Form Data
-    const formData = ref({
-    id: null,
-    type: 'expense', // 'income' | 'expense'
-    date: '',
-    amount: '',
-    category: '기타',
-    title: '',
-    memo: ''
-})
-
-    // 삭제 모달 상태
-    const deleteConfirm = ref(false)
-
-    // Watchers
-    watch(() => props.isOpen, (newVal) => {
-    if (newVal) {
-    if (props.initialEditData) {
-    setEditMode(props.initialEditData)
-} else {
-    mode.value = 'list'
-}
-}
-})
-
-    // Computed
-    const isExpense = computed(() => formData.value.type === 'expense')
-
-    // Methods
-    const setAddMode = () => {
-    mode.value = 'add'
-    formData.value = {
-    id: null,
-    type: 'expense',
-    date: props.selectedDate,
-    amount: '',
-    category: '식비',
-    title: '',
-    memo: ''
-}
-}
-
-    const setEditMode = async (txn) => {
-    mode.value = 'edit'
-    // 기본 데이터로 먼저 채움 (빠른 UI 반응)
-    formData.value = {
-    ...txn,
-    amount: String(txn.amount),
-    memo: txn.memo || '' // 1차적으로 있는거 씀
-}
-
-    // 상세 데이터 비동기 로드 (Memo가 없을 수 있으므로)
-    if (txn.id) {
-    const detail = await store.fetchTransactionDetail(txn.id)
-    if (detail) {
-    formData.value = {
-    ...formData.value,
-    memo: detail.memo || ''
-}
-}
-}
-}
-
-    const goBackToList = () => {
-    if (props.initialEditData) {
-    emit('close')
-} else {
-    mode.value = 'list'
-}
-}
-
-    const handleSubmit = async () => {
-    if (!formData.value.title || !formData.value.amount) {
-    alert('내용과 금액을 입력해주세요.')
-    return
-}
-
-    const payload = {
-    ...formData.value,
-    amount: parseInt(formData.value.amount, 10),
-    date: formData.value.date
-}
-
-    let success = false
-    if (mode.value === 'add') {
-    success = await store.addTransaction(payload)
-} else if (mode.value === 'edit' && formData.value.id) {
-    success = await store.updateTransaction(formData.value.id, payload)
-}
-
-    if (success) {
-    if (props.initialEditData) {
-    emit('close')
-} else {
-    mode.value = 'list'
-}
-} else {
-    alert('저장 중 오류가 발생했습니다.')
-}
-}
-
-    // 삭제 처리: 모달 열기
-    const handleDelete = () => {
-    deleteConfirm.value = true
-}
-
-    // 삭제 확정
-    const handleDeleteConfirm = async () => {
-    if (!formData.value.id) return
-    const success = await store.deleteTransaction(formData.value.id)
-    if (success) {
-    deleteConfirm.value = false
-    if (props.initialEditData) {
-    emit('close')
-} else {
-    mode.value = 'list'
-}
-} else {
-    alert('삭제 중 오류가 발생했습니다.')
-}
-}
-
-    const closeModal = () => {
-    emit('close')
-}
-</script>
-
-<template>
-    <div v-if="isOpen" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-    @click.self="closeModal">
-    <div class="bg-white rounded-lg p-6 w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden">
-
-        <!-- Header -->
-        <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-2">
-                <button v-if="mode !== 'list' && !initialEditData" @click="goBackToList"
-                class="p-1 hover:bg-gray-200 rounded-full transition-colors">
-                <ArrowLeft class="size-5 text-gray-600"/>
-            </button>
-            <h3 class="text-lg font-semibold text-gray-900">
-                <span v-if="mode === 'list'">{{ selectedDate }} 거래 내역</span>
-                <span v-else-if="mode === 'add'">거래 추가</span>
-                <span v-else>거래 수정</span>
-            </h3>
-        </div>
-        <div class="flex items-center gap-2">
-            <button v-if="mode === 'list'" @click="setAddMode" class="btn btn-sm btn-primary flex items-center gap-1">
-            <Plus class="size-4"/>
-            추가
-        </button>
-        <button @click="closeModal" class="p-1 hover:bg-gray-200 rounded-full transition-colors">
-        <X class="size-5 text-gray-500"/>
-    </button>
-</div>
-</div>
-
-<!-- Content -->
-<div class="flex-1 overflow-y-auto">
-    <!-- List View -->
-    <div v-if="mode === 'list'" class="space-y-3">
-        <div v-if="initialTransactions.length === 0" class="text-center py-10 text-muted-foreground">
-            <div class="bg-gray-100 p-4 rounded-full mb-3 inline-block">
-                <Plus class="size-8 text-gray-300"/>
-            </div>
-            <p>거래 내역이 없습니다.</p>
-            <p class="text-sm mt-1">우측 상단 '추가' 버튼을 눌러보세요.</p>
-        </div>
-
-        <div
-            v-else
-            v-for="txn in initialTransactions"
-        :key="txn.id"
-        @click="setEditMode(txn)"
-        class="group bg-white p-3 rounded-lg border hover:border-blue-400 hover:shadow-sm cursor-pointer transition-all flex items-center justify-between"
-        >
-        <div class="flex-1 min-w-0 pr-3">
-            <div class="flex items-center gap-2 mb-1">
-                <span class="px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-bold">
-                  {{ txn.category }}
-                </span>
-                <span class="font-medium text-gray-900 truncate">{{ txn.title }}</span>
-            </div>
-            <p v-if="txn.memo" class="text-xs text-gray-500 truncate">{{ txn.memo }}</p>
-        </div>
-        <!-- 금액: 타입에 따라 색상 적용 -->
-        <div class="text-right whitespace-nowrap">
-    <span
-        class="block font-bold"
-            :style="{
-            color: txn.type.toLowerCase() === 'expense' ? '#ED1C24' : '#22B14C'
-        }"
-            >
-            {{ txn.type.toLowerCase() === 'expense' ? '-' : '+' }}{{ txn.amount.toLocaleString() }}원
-        </span>
-    </div>
-</div>
-</div>
-
-<!-- Form View (Add/Edit) -->
-<div v-else class="space-y-4">
-    <!-- Type Toggle -->
-    <div class="flex gap-2">
-        <button
-            type="button"
-        @click="formData.type = 'expense'"
-        class="btn flex-1"
-        :style="{
-        backgroundColor: formData.type === 'expense' ? '#ED1C24' : '#e5e7eb',
-        color: formData.type === 'expense' ? 'white' : '#6b7280'
-    }"
-        >
-        지출
-    </button>
-    <button
-        type="button"
-    @click="formData.type = 'income'"
-    class="btn flex-1"
-    :style="{
-    backgroundColor: formData.type === 'income' ? '#22B14C' : '#e5e7eb',
-    color: formData.type === 'income' ? 'white' : '#6b7280'
-}"
-    >
-    수입
-</button>
-</div>
-
-<!-- Date -->
-<div class="space-y-2">
-    <label class="label">날짜</label>
-    <input v-model="formData.date" type="date" class="input"/>
-</div>
-
-<!-- Title -->
-<div class="space-y-2">
-    <label class="label">제목</label>
-    <input v-model="formData.title" type="text" placeholder="거래 제목을 입력하세요" class="input"/>
-</div>
-
-<!-- Amount -->
-<div class="space-y-2">
-    <label class="label">금액</label>
-    <input v-model="formData.amount" type="number" placeholder="0" class="input"/>
-</div>
-
-<!-- Category -->
-<div v-if="formData.type === 'expense'" class="space-y-2">
-    <label class="label">카테고리</label>
-    <select v-model="formData.category" class="input">
-        <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
-</select>
-</div>
-
-<!-- Memo -->
-<div class="space-y-2">
-    <label class="label">메모 (선택)</label>
-    <textarea v-model="formData.memo" rows="3" placeholder="상세 내용을 입력하세요" class="input resize-none"></textarea>
-</div>
-</div>
-</div>
-
-<!-- Footer Actions -->
-<div v-if="mode !== 'list'" class="flex gap-2 mt-6">
-    <button
-        v-if="mode === 'edit'"
-    @click="handleDelete"
-    class="btn btn-outline border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300"
-    >
-    <Trash2 class="size-4"/>
-</button>
-<button v-else @click="goBackToList" class="btn btn-outline flex-1">
-    취소
-    </button>
-
-<button @click="handleSubmit" class="btn btn-primary flex-1">
-    {{ mode === 'add' ? '추가' : '수정' }}
-</button>
-</div>
-</div>
-
-<!-- Delete Modal -->
-<div
-    v-if="deleteConfirm"
-    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-        @click.self="deleteConfirm = false"
-    >
-    <div class="bg-white rounded-lg p-6 w-full max-w-sm">
-    <h3 class="text-lg font-semibold mb-2">거래를 삭제하시겠습니까?</h3>
-<p class="text-sm text-gray-500 mb-4">삭제하면 되돌릴 수 없습니다.</p>
-<div class="flex gap-2">
-    <button class="btn btn-outline flex-1" @click="deleteConfirm = false">취소</button>
-<button class="btn btn-destructive flex-1" @click="handleDeleteConfirm">삭제</button>
-</div>
-</div>
-</div>
-
-</div>
-</template>
-
-<style scoped>
-    input::-webkit-outer-spin-button,
-    input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-
-    input[type=number] {
-    -moz-appearance: textfield;
-}
-
-    .text-tiny {
-    font-size: 0.75rem;
-    line-height: 1rem;
-}
-</style>
