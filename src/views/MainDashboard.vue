@@ -236,7 +236,8 @@ onMounted(() => {
                 :key="dayName"
                 class="text-center text-sm py-2 font-bold"
                 :style="{
-                  color: index === 0 ? '#ED1C24' : index === 6 ? '#0b39b4' : '#000000'
+                  // color: index === 0 ? '#ED1C24' : index === 6 ? '#0b39b4' : '#000000'
+                  color: index === 0 ? '#ED1C24' : index === 6 ? '#5B2C83' : '#5B2C83'
                 }"
             >
               {{ dayName }}
@@ -259,7 +260,8 @@ onMounted(() => {
   }"
             >
               <!-- 날짜와 금액 사이만 간격 -->
-              <div class="text-sm font-medium mb-3" style="color: #000000">{{ day }}</div>
+<!--              <div class="text-sm font-medium mb-3" style="color: #000000">{{ day }}</div>-->
+              <div class="text-sm font-medium mb-3" style="color: #5B2C83">{{ day }}</div>
 
               <!-- 수입 -->
               <div v-if="getDayTotals(getDateString(day)).income > 0" class="text-xs" style="color: #22B14C">
