@@ -18,19 +18,36 @@ const activeTab = ref('active') // 'active' or 'finished'
 
 const goalStats = computed(() => store.goals)
 
-const activeGoals = computed(() => goalStats.value
-  .filter(g => !['COMPLETED', 'FAILED'].includes(g.rawStatus))
-  .sort((a, b) => {
-    // Savings first
-    if (a.type === 'savings' && b.type !== 'savings') return -1
-    if (a.type !== 'savings' && b.type === 'savings') return 1
-    return 0
-  })
+const isFinished = (goal) => {
+  const end = new Date(goal.endDate)
+  const today = new Date()
+
+  // 시간 제거 (날짜 단위 비교)
+  end.setHours(23, 59, 59, 999)
+  today.setHours(0, 0, 0, 0)
+
+  return end < today
+}
+
+const activeGoals = computed(() =>
+    goalStats.value
+        .filter(g =>
+            g.status === 'ACTIVE' ||
+            (g.status === 'EXCEEDED' && !isFinished(g))
+        )
+        .sort((a, b) => {
+          if (a.type === 'savings' && b.type !== 'savings') return -1
+          if (a.type !== 'savings' && b.type === 'savings') return 1
+          return 0
+        })
 )
 
-const finishedGoals = computed(() => goalStats.value.filter(g => 
-    ['COMPLETED', 'FAILED'].includes(g.rawStatus)
-))
+const finishedGoals = computed(() =>
+    goalStats.value.filter(g =>
+        isFinished(g) ||
+        ['COMPLETED', 'FAILED', 'SUCCESS'].includes(g.status)
+    )
+)
 
 const handleAddClick = () => {
   selectedGoal.value = null
@@ -51,35 +68,35 @@ const handleFormSubmit = async (payload) => {
   try {
     // Frontend Validation for Duplicates
     if (payload.type === 'savings') {
-        // 저축 목표 중복 체크
-        // If editing, exclude self.
-        const duplicate = activeGoals.value.find(g => 
-            g.type === 'savings' && 
-            (!selectedGoal.value || g.id !== selectedGoal.value.id)
-        )
-        if (duplicate) {
-            toast.error('이미 진행 중인 저축 목표가 있습니다.')
-            return
-        }
+      // 저축 목표 중복 체크
+      // If editing, exclude self.
+      const duplicate = activeGoals.value.find(g =>
+          g.type === 'savings' &&
+          (!selectedGoal.value || g.id !== selectedGoal.value.id)
+      )
+      if (duplicate) {
+        toast.error('이미 진행 중인 저축 목표가 있습니다.')
+        return
+      }
     } else {
-        // 지출 목표 중복 체크 (카테고리별 1개)
-        const duplicate = activeGoals.value.find(g => {
-            if (g.type !== 'spending') return false
-            if (selectedGoal.value && g.id === selectedGoal.value.id) return false
-            
-            // Category Matching
-            const goalCat = g.category
-            const payloadCat = payload.category
+      // 지출 목표 중복 체크 (카테고리별 1개)
+      const duplicate = activeGoals.value.find(g => {
+        if (g.type !== 'spending') return false
+        if (selectedGoal.value && g.id === selectedGoal.value.id) return false
 
-            if (goalCat === payloadCat) return true
-            
-            return false
-        })
-        
-        if (duplicate) {
-             toast.error('해당 카테고리에 이미 진행 중인 지출 목표가 있습니다.')
-             return
-        }
+        // Category Matching
+        const goalCat = g.category
+        const payloadCat = payload.category
+
+        if (goalCat === payloadCat) return true
+
+        return false
+      })
+
+      if (duplicate) {
+        toast.error('해당 카테고리에 이미 진행 중인 지출 목표가 있습니다.')
+        return
+      }
     }
 
     if (selectedGoal.value) {
@@ -106,7 +123,6 @@ const handleDeleteConfirm = async () => {
     await store.deleteGoal(deleteConfirmId.value)
     toast.success('목표가 삭제되었습니다.')
     deleteConfirmId.value = null
-    deleteConfirmId.value = null
   }
 }
 
@@ -117,6 +133,7 @@ const handleDetailClick = (id) => {
 onMounted(() => {
   store.fetchGoals()
 })
+
 </script>
 
 <template>
@@ -124,8 +141,8 @@ onMounted(() => {
     <div class="flex items-center justify-between">
       <h1 style="color: #000000">목표</h1>
       <button
-        @click="handleAddClick"
-        class="btn btn-primary"
+          @click="handleAddClick"
+          class="btn btn-primary"
       >
         <Plus class="size-4 mr-2" />
         새 목표 추가
@@ -134,55 +151,55 @@ onMounted(() => {
 
     <!-- Tabs -->
     <div class="flex border-b border-gray-200">
-        <button 
-            @click="activeTab = 'active'"
-            class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-            :class="activeTab === 'active' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'"
-        >
-            진행 중인 목표
-        </button>
-        <button 
-            @click="activeTab = 'finished'"
-            class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
-            :class="activeTab === 'finished' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'"
-        >
-            종료된 목표
-        </button>
+      <button
+          @click="activeTab = 'active'"
+          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+          :class="activeTab === 'active' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'"
+      >
+        진행 중인 목표
+      </button>
+      <button
+          @click="activeTab = 'finished'"
+          class="px-4 py-2 text-sm font-medium border-b-2 transition-colors"
+          :class="activeTab === 'finished' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'"
+      >
+        종료된 목표
+      </button>
     </div>
 
     <GoalList
-      v-if="activeTab === 'active'"
-      :goals="activeGoals"
-      @edit="handleEditClick"
-      @delete="handleDeleteClick"
-      @detail="handleDetailClick"
+        v-if="activeTab === 'active'"
+        :goals="activeGoals"
+        @edit="handleEditClick"
+        @delete="handleDeleteClick"
+        @detail="handleDetailClick"
     />
 
     <GoalList
-      v-else
-      :goals="finishedGoals"
-      @edit="handleEditClick"
-      @delete="handleDeleteClick"
-      @detail="handleDetailClick"
+        v-else
+        :goals="finishedGoals"
+        @edit="handleEditClick"
+        @delete="handleDeleteClick"
+        @detail="handleDetailClick"
     />
 
     <GoalFormDialog
-      :is-open="isAddDialogOpen"
-      :initial-goal="selectedGoal"
-      @close="isAddDialogOpen = false"
-      @submit="handleFormSubmit"
+        :is-open="isAddDialogOpen"
+        :initial-goal="selectedGoal"
+        @close="isAddDialogOpen = false"
+        @submit="handleFormSubmit"
     />
 
     <GoalDeleteDialog
-      :is-open="!!deleteConfirmId"
-      @close="deleteConfirmId = null"
-      @confirm="handleDeleteConfirm"
+        :is-open="!!deleteConfirmId"
+        @close="deleteConfirmId = null"
+        @confirm="handleDeleteConfirm"
     />
 
     <GoalDetailModal
-      :is-open="!!detailGoalId"
-      :goal-id="detailGoalId"
-      @close="detailGoalId = null"
+        :isOpen="!!detailGoalId"
+        :goalId="detailGoalId"
+        @close="detailGoalId = null"
     />
   </div>
 </template>

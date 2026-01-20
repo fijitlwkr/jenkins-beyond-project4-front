@@ -148,6 +148,8 @@ const handleSubmit = async () => {
 }
 
 const handleDeleteAccount = async () => {
+  const confirmed = window.confirm('정말 탈퇴하시겠습니까? 사용자 정보가 모두 사라집니다.')
+  if (!confirmed) return
   await store.deleteAccount()
   toast.success('계정이 삭제되었습니다.')
   router.push('/login')
@@ -171,11 +173,11 @@ const handleLogout = async () => {
           <p class="card-description">현재 로그인된 계정 정보</p>
         </div>
         <button
-          v-if="!isEditing"
-          @click="startEditing"
-          class="btn btn-outline p-2"
-          style="border-color: #6AA6DA; color: #6AA6DA"
-          title="수정"
+            v-if="!isEditing"
+            @click="startEditing"
+            class="btn btn-outline p-2"
+            style="border-color: #6AA6DA; color: #6AA6DA"
+            title="수정"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -187,15 +189,15 @@ const handleLogout = async () => {
       <div v-if="!isEditing" class="card-content space-y-4">
         <div>
           <label class="label">아이디</label>
-          <p class="text-sm mt-1">{{ store.user?.loginId || '-' }}</p>
+          <p class="text-sm mt-1 text-gray-800">{{ store.user?.loginId || '-' }}</p>
         </div>
         <div>
           <label class="label">닉네임</label>
-          <p class="text-sm mt-1">{{ store.user?.nickname || '-' }}</p>
+          <p class="text-sm mt-1 text-gray-800">{{ store.user?.nickname || '-' }}</p>
         </div>
         <div>
           <label class="label">이메일</label>
-          <p class="text-sm mt-1">{{ store.user?.email || '-' }}</p>
+          <p class="text-sm mt-1 text-gray-800">{{ store.user?.email || '-' }}</p>
         </div>
       </div>
 
@@ -205,25 +207,25 @@ const handleLogout = async () => {
           <div class="space-y-2">
             <label for="loginId" class="label">아이디</label>
             <input
-              id="loginId"
-              type="text"
-              v-model="editForm.loginId"
-              class="input"
-              minlength="4"
-              maxlength="20"
-              pattern="^[a-zA-Z0-9]*$"
+                id="loginId"
+                type="text"
+                v-model="editForm.loginId"
+                class="input"
+                minlength="4"
+                maxlength="20"
+                pattern="^[a-zA-Z0-9]*$"
             />
           </div>
 
           <div class="space-y-2">
             <label for="nickname" class="label">닉네임</label>
             <input
-              id="nickname"
-              type="text"
-              v-model="editForm.nickname"
-              class="input"
-              minlength="2"
-              maxlength="10"
+                id="nickname"
+                type="text"
+                v-model="editForm.nickname"
+                class="input"
+                minlength="2"
+                maxlength="10"
             />
           </div>
 
@@ -231,19 +233,19 @@ const handleLogout = async () => {
             <label for="email" class="label">이메일</label>
             <div class="flex gap-2">
               <input
-                id="email"
-                type="email"
-                v-model="editForm.email"
-                @input="onEmailChange"
-                class="input flex-1"
-                :disabled="isEmailVerified"
+                  id="email"
+                  type="email"
+                  v-model="editForm.email"
+                  @input="onEmailChange"
+                  class="input flex-1"
+                  :disabled="isEmailVerified"
               />
               <button
-                v-if="isEmailChanged && !isEmailVerified"
-                type="button"
-                @click="handleSendVerification"
-                :disabled="!editForm.email || isEmailSending"
-                class="btn btn-primary flex items-center gap-2"
+                  v-if="isEmailChanged && !isEmailVerified"
+                  type="button"
+                  @click="handleSendVerification"
+                  :disabled="!editForm.email || isEmailSending"
+                  class="btn btn-primary flex items-center gap-2"
               >
                 <svg v-if="isEmailSending" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -259,17 +261,17 @@ const handleLogout = async () => {
             <label for="verificationCode" class="label">인증 코드</label>
             <div class="flex gap-2">
               <input
-                id="verificationCode"
-                type="text"
-                v-model="verificationCode"
-                class="input flex-1"
-                :disabled="isCodeVerifying"
+                  id="verificationCode"
+                  type="text"
+                  v-model="verificationCode"
+                  class="input flex-1"
+                  :disabled="isCodeVerifying"
               />
               <button
-                type="button"
-                @click="handleVerifyEmail"
-                :disabled="!verificationCode || isCodeVerifying"
-                class="btn btn-primary flex items-center gap-2"
+                  type="button"
+                  @click="handleVerifyEmail"
+                  :disabled="!verificationCode || isCodeVerifying"
+                  class="btn btn-primary flex items-center gap-2"
               >
                 <svg v-if="isCodeVerifying" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -289,20 +291,20 @@ const handleLogout = async () => {
           <div class="space-y-2">
             <label for="currentPassword" class="label">현재 비밀번호 (필수)</label>
             <input
-              id="currentPassword"
-              type="password"
-              v-model="editForm.currentPassword"
-              required
-              class="input"
-              placeholder="변경사항 저장을 위해 현재 비밀번호를 입력하세요"
+                id="currentPassword"
+                type="password"
+                v-model="editForm.currentPassword"
+                required
+                class="input"
+                placeholder="변경사항 저장을 위해 현재 비밀번호를 입력하세요"
             />
           </div>
 
           <div class="flex gap-2">
             <button
-              type="submit"
-              class="btn btn-primary flex-1 flex items-center justify-center gap-2"
-              :disabled="isUpdating"
+                type="submit"
+                class="btn btn-primary flex-1 flex items-center justify-center gap-2"
+                :disabled="isUpdating"
             >
               <svg v-if="isUpdating" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -311,9 +313,9 @@ const handleLogout = async () => {
               {{ isUpdating ? '저장 중...' : '저장' }}
             </button>
             <button
-              type="button"
-              @click="cancelEditing"
-              class="btn btn-outline flex-1"
+                type="button"
+                @click="cancelEditing"
+                class="btn btn-outline flex-1"
             >
               취소
             </button>
@@ -329,15 +331,15 @@ const handleLogout = async () => {
       </div>
       <div class="card-content space-y-4">
         <button
-          @click="handleLogout"
-          class="btn btn-outline w-full"
-          style="border-color: #6AA6DA; color: #6AA6DA"
+            @click="handleLogout"
+            class="btn btn-outline w-full"
+            style="border-color: #6AA6DA; color: #6AA6DA"
         >
           로그아웃
         </button>
         <button
-          @click="handleDeleteAccount"
-          class="btn btn-destructive w-full"
+            @click="handleDeleteAccount"
+            class="btn btn-destructive w-full"
         >
           계정 삭제
         </button>
