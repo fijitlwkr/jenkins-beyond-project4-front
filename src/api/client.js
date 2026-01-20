@@ -78,7 +78,15 @@ export const apiRequest = async (endpoint, options = {}) => {
     throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.')
   }
 
-  const data = await response.json()
+  // JSON 파싱 시도 - HTML 응답 등 예외 처리
+  let data
+  try {
+    const text = await response.text()
+    data = JSON.parse(text)
+  } catch (parseError) {
+    console.error('[apiRequest] JSON 파싱 실패:', endpoint, parseError)
+    throw new Error('서버 응답을 처리할 수 없습니다.')
+  }
 
   if (!response.ok) {
     const errorMessage = data?.error?.message || data?.message || 'API request failed'

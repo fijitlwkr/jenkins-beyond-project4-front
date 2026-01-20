@@ -84,11 +84,25 @@ const getDateString = (day) => {
 const loadMonthlyData = async () => {
   loading.value = true
   try {
-    await store.fetchMonthlyData(year.value, month.value)
-    // 우선 빠르게 5개라도 보여줌
-    await store.fetchTransactions(year.value, month.value)
-    // 달력 데이터까지 모두 로딩 완료 후 로딩 화면 종료
-    await store.fetchAllDaysInMonth(year.value, month.value)
+    // 각 API 호출을 독립적으로 실행하여 하나가 실패해도 다른 것들이 실행되도록 함
+    try {
+      await store.fetchMonthlyData(year.value, month.value)
+    } catch (e) {
+      console.error('[loadMonthlyData] fetchMonthlyData 실패:', e)
+    }
+
+    try {
+      await store.fetchTransactions(year.value, month.value)
+    } catch (e) {
+      console.error('[loadMonthlyData] fetchTransactions 실패:', e)
+    }
+
+    // 핵심: 모든 날짜의 트랜잭션을 가져와서 캘린더에 표시
+    try {
+      await store.fetchAllDaysInMonth(year.value, month.value)
+    } catch (e) {
+      console.error('[loadMonthlyData] fetchAllDaysInMonth 실패:', e)
+    }
   } finally {
     loading.value = false
   }
