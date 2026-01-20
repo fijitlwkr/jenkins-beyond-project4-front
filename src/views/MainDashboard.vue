@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useAppStore } from '../stores/app'
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Wallet } from 'lucide-vue-next'
 import TransactionModal from '../components/TransactionModal.vue'
+import LoadingOverlay from '../components/LoadingOverlay.vue'
 
 const store = useAppStore()
 const currentDate = ref(new Date())
@@ -46,21 +47,21 @@ const calendarData = computed(() => {
 const transactionsByDate = computed(() => {
   const grouped = {}
   if (store.transactions.length > 0) {
-      // console.log('[MainDashboard] First txn date:', store.transactions[0].date, 'Type:', typeof store.transactions[0].date)
+    // console.log('[MainDashboard] First txn date:', store.transactions[0].date, 'Type:', typeof store.transactions[0].date)
   }
-  
+
   store.transactions.forEach(t => {
     // 날짜 매칭 디버깅을 위해 정규화 한번 더 보장 (안전장치)
     const rawDate = t.date
     // 혹시 모를 공백 제거
     const simpleDate = rawDate ? String(rawDate).trim().split('T')[0] : ''
-    
+
     if (!grouped[simpleDate]) {
       grouped[simpleDate] = []
     }
     grouped[simpleDate].push(t)
   })
-  
+
   // console.log('[MainDashboard] Grouped keys:', Object.keys(grouped))
   return grouped
 })
@@ -86,13 +87,11 @@ const loadMonthlyData = async () => {
     await store.fetchMonthlyData(year.value, month.value)
     // 우선 빠르게 5개라도 보여줌
     await store.fetchTransactions(year.value, month.value)
+    // 달력 데이터까지 모두 로딩 완료 후 로딩 화면 종료
+    await store.fetchAllDaysInMonth(year.value, month.value)
   } finally {
     loading.value = false
   }
-  
-  // 이후 전체 날짜 전수 조사 (백그라운드에서 실행, await 없이)
-  // 백엔드 제약을 우회하여 캘린더를 채우기 위함
-  store.fetchAllDaysInMonth(year.value, month.value)
 }
 
 const prevMonth = () => {
@@ -109,14 +108,14 @@ const handleDayClick = async (dateStr) => {
   console.log('[MainDashboard] 날짜 클릭:', dateStr)
   selectedDate.value = dateStr
   selectedTransaction.value = null
-  
+
   // 사용자 요청: 클릭 시 API 호출하여 최신 데이터 가져오기
   console.log('[MainDashboard] fetchDailyTransactions 호출 전')
   const result = await store.fetchDailyTransactions(dateStr)
   console.log('[MainDashboard] fetchDailyTransactions 결과:', result)
   console.log('[MainDashboard] store.dailyTransactions:', store.dailyTransactions)
   console.log('[MainDashboard] selectedDayTransactions:', selectedDayTransactions.value)
-  
+
   isModalOpen.value = true
 }
 
@@ -130,13 +129,13 @@ const handleTransactionClick = (txn) => {
 const selectedDayTransactions = computed(() => {
   console.log('[selectedDayTransactions] selectedDate:', selectedDate.value)
   console.log('[selectedDayTransactions] dailyTransactions:', store.dailyTransactions)
-  
+
   // 날짜 클릭 후 API 호출했다면 dailyTransactions를 우선 사용
   if (selectedDate.value && store.dailyTransactions.length > 0) {
     console.log('[selectedDayTransactions] dailyTransactions 사용:', store.dailyTransactions.length, '건')
     return store.dailyTransactions
   }
-  
+
   // 아니면 기존 로직(전체 리스트에서 필터링) 사용 (Fallback)
   const fallback = selectedDate.value ? (transactionsByDate.value[selectedDate.value] || []) : []
   console.log('[selectedDayTransactions] Fallback 사용:', fallback.length, '건')
@@ -155,6 +154,9 @@ onMounted(() => {
 </script>
 
 <template>
+  <!-- 로딩 오버레이 -->
+  <LoadingOverlay v-if="loading" />
+
   <div class="p-6 space-y-6">
     <!-- Top Summary Section -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
