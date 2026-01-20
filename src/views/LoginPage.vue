@@ -11,11 +11,16 @@ const loginId = ref('')
 const password = ref('')
 
 const handleSubmit = async () => {
+  console.log('[Login] 로그인 시도:', loginId.value)
   const success = await store.login(loginId.value, password.value)
+  console.log('[Login] 로그인 결과:', success, 'isAuthenticated:', store.isAuthenticated)
   if (success) {
     toast.success('로그인 성공!')
-    router.push('/dashboard')
+    console.log('[Login] dashboard로 이동 시도')
+    await router.push('/dashboard')
+    console.log('[Login] router.push 완료')
   } else {
+    console.log('[Login] 로그인 실패, error:', store.error)
     toast.error(store.error || '로그인에 실패했습니다.')
   }
 }

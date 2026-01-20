@@ -55,7 +55,7 @@ export const createTransaction = async (transaction) => {
         body.category = categoryToEnum[transaction.category] ?? 'ETC'
     }
 
-    return await apiRequest('/transaction/write', {
+    return await apiRequest('/api/transaction/write', {
         method: 'POST',
         body: JSON.stringify(body)
     })
@@ -75,7 +75,7 @@ export const updateTransaction = async (transactionId, transaction) => {
         body.category = categoryToEnum[transaction.category] ?? 'ETC'
     }
 
-    return await apiRequest(`/transaction/edit/${transactionId}`, {
+    return await apiRequest(`/api/transaction/edit/${transactionId}`, {
         method: 'PUT',
         body: JSON.stringify(body)
     })
@@ -83,13 +83,13 @@ export const updateTransaction = async (transactionId, transaction) => {
 
 // 거래 삭제
 export const deleteTransaction = async (transactionId) => {
-    return await apiRequest(`/transaction/delete/${transactionId}`, { method: 'DELETE' })
+    return await apiRequest(`/api/transaction/delete/${transactionId}`, { method: 'DELETE' })
 }
 
 // 거래 조회 (기간별)
 export const getTransactions = async (startDate, endDate) => {
     const queryParams = new URLSearchParams({ startDate, endDate }).toString()
-    const response = await apiRequest(`/transaction/list?${queryParams}`, { method: 'GET' })
+    const response = await apiRequest(`/api/transaction/list?${queryParams}`, { method: 'GET' })
 
     if (response.result === 'SUCCESS' && Array.isArray(response.data)) {
         return {
@@ -102,7 +102,7 @@ export const getTransactions = async (startDate, endDate) => {
 }
 
 export const getTransaction = async (transactionId) => {
-    const response = await apiRequest(`/transaction/modal?transactionId=${transactionId}`, { method: 'GET' })
+    const response = await apiRequest(`/api/transaction/modal?transactionId=${transactionId}`, { method: 'GET' })
     if (response.result === 'SUCCESS' && response.data) {
         // 백엔드가 List 형태로 반환하므로 첫 번째 요소를 사용해야 함
         const data = Array.isArray(response.data) ? response.data[0] : response.data
@@ -115,13 +115,13 @@ export const getTransaction = async (transactionId) => {
 
 // 월간 요약
 export const getMonthlySummary = async (year, month) => {
-    return await apiRequest(`/transaction/monthly?year=${year}&month=${month}`, { method: 'GET' })
+    return await apiRequest(`/api/transaction/monthly?year=${year}&month=${month}`, { method: 'GET' })
 }
 
 // 일간 거래
 export const getDailyTransactions = async (date) => {
     // console.log(`[API] getDailyTransactions fetching: ${date}`)
-    const response = await apiRequest(`/transaction/daily?date=${date}`, { method: 'GET' })
+    const response = await apiRequest(`/api/transaction/daily?date=${date}`, { method: 'GET' })
     if (response.result === 'SUCCESS' && Array.isArray(response.data)) {
         // console.log(`[API] getDailyTransactions success (${date}):`, response.data.length, 'items')
         // 백엔드가 date 필드를 안 주므로 수동으로 추가

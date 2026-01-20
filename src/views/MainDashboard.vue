@@ -84,7 +84,7 @@ const getDateString = (day) => {
 const loadMonthlyData = async () => {
   loading.value = true
   try {
-    // 각 API 호출을 독립적으로 실행하여 하나가 실패해도 다른 것들이 실행되도록 함
+    // 월간 데이터 조회 (백엔드 /transaction/list API 사용)
     try {
       await store.fetchMonthlyData(year.value, month.value)
     } catch (e) {
@@ -97,12 +97,8 @@ const loadMonthlyData = async () => {
       console.error('[loadMonthlyData] fetchTransactions 실패:', e)
     }
 
-    // 핵심: 모든 날짜의 트랜잭션을 가져와서 캘린더에 표시
-    try {
-      await store.fetchAllDaysInMonth(year.value, month.value)
-    } catch (e) {
-      console.error('[loadMonthlyData] fetchAllDaysInMonth 실패:', e)
-    }
+    // 참고: fetchAllDaysInMonth는 백엔드 /transaction/daily API가 없어서 비활성화
+    // 백엔드에서 /transaction/list API의 반환 개수 제한을 제거해야 모든 트랜잭션이 표시됩니다.
   } finally {
     loading.value = false
   }
