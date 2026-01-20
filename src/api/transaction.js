@@ -87,8 +87,8 @@ export const deleteTransaction = async (transactionId) => {
 }
 
 // 거래 조회 (기간별)
-export const getTransactions = async (startDate, endDate) => {
-    const queryParams = new URLSearchParams({ startDate, endDate }).toString()
+export const getTransactions = async (startDate, endDate, limit = 1000) => {
+    const queryParams = new URLSearchParams({ startDate, endDate, limit: limit.toString() }).toString()
     const response = await apiRequest(`/transaction/list?${queryParams}`, { method: 'GET' })
 
     if (response.result === 'SUCCESS' && Array.isArray(response.data)) {
