@@ -1,5 +1,5 @@
 // API 기본 설정
-const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+// const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
 // 토큰 관리
 const TOKEN_KEY = 'armageddon_tokens'
